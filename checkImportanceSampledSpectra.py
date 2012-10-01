@@ -20,9 +20,15 @@ from ROOT import TLegend
 
 def get_hist(weight):
     
+    # options:
+    max_bin = 1500
+    bin_width = 20.0
+
     gROOT.cd() # deal with TH1D/TFile/python scope issues!!
     name = 'hist_weight%.3e' % weight
-    hist = TH1D(name, '', 200, 0, 1000)
+    n_bins = int(1.0*max_bin/bin_width)
+    hist = TH1D(name, '', n_bins, 0, max_bin)
+    hist.Sumw2()
     #print '----> making hist: %s' % hist.GetName()
     return hist
 
@@ -80,11 +86,23 @@ def main(root_file_names):
         weight_to_n_events_dict[weight] = n_total_events
         #print hist.GetEntries()
         hist.GetDirectory().cd()
+
+        # this draws edep from each step
+        #tree.Draw(
+        #    'fEdep*1e3 >> +%s' % hist.GetName(),
+        #    'fTrackWeight*(fEdep>0)',
+        #    'goff'
+        #)
+
+        # this draws total edep -- assuming fTrackWeight taken from the last step
+        # in the first event applied to all events!
         tree.Draw(
-            'fEdep*1e3 >> +%s' % hist.GetName(),
-            'fTrackWeight*(fEdep>0)',
+            'fTotalEnergy*1e3 >> +%s' % hist.GetName(),
+            #'%s*(fTotalEnergy>0)' % weight,
+            'fTrackWeight[1]*(fTotalEnergy>0)',
             'goff'
         )
+
         #print hist.GetEntries()
 
         # end loop over input files
@@ -96,7 +114,7 @@ def main(root_file_names):
     canvas = TCanvas('canvas', '')
     canvas.SetLogy(1)
     legend = TLegend(0.1, 0.91, 0.9, 0.99)
-    legend.SetNColumns(2)
+    legend.SetNColumns(4)
 
     # find the max
     max_y_value = 0
@@ -113,24 +131,42 @@ def main(root_file_names):
         weight = weights[i_weight]
         hist = weight_to_hist_dict[weight]
         hist.SetLineWidth(2)
-        hist.SetLineColor(i_weight+2)
-        print 'weight: %.2e | %s' % (weight, hist.GetName())
+        color = i_weight+2
+        hist.SetFillColor(color)
+        hist.SetLineColor(color)
+        #hist.SetMarkerColor(color)
+        n_entries = hist.GetEntries()
+        n_hits_per_decay = hist.Integral(0, hist.GetNbinsX())
 
-        draw_opt = 'same'
+        print 'hist %i | weight: %.1e | hits: %i | eff: %.2e +/- %.2e' % (
+            i_weight,
+            weight, 
+            n_entries,
+            n_hits_per_decay,
+            n_hits_per_decay/math.sqrt(n_entries),
+
+        )
+
+        draw_opt = 'e2'
         if i_weight is 0:
-            draw_opt = ''
-            hist.SetMaximum(max_y_value)
+            hist.SetMaximum(max_y_value*2.0)
             hist.SetXTitle('Energy [keV]')
             hist.SetYTitle('Counts / Decay / %.1f keV' % hist.GetBinWidth(1))
             hist.GetYaxis().SetTitleOffset(1.2)
+        else:
+            draw_opt += ' same'
 
         hist.Draw(draw_opt)
-        legend.AddEntry(hist, 'weight = %.1e' % weight, 'l')
+        entry_label = '%.1e, %.1e entries' % (weight, n_entries)
+        legend.AddEntry(hist, entry_label, 'l')
 
 
     legend.Draw()        
     canvas.Update()
-    #canvas.Print('importanceSampledSpectra.pdf')
+
+    prefix = os.path.commonprefix(root_file_names)
+    prefix = os.path.basename(prefix)
+    #canvas.Print('%s_IS_Spectra.pdf' % prefix)
 
     raw_input('--> enter to continue')
 
