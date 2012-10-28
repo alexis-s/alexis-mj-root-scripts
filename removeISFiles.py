@@ -18,12 +18,12 @@ from ROOT import TFile
 
 def main(root_file_names):
 
-    #weight_threshold = 1e-1 # for Al stand plate
+    weight_threshold = 1e-1 # for Al stand plate
     #weight_threshold = 1e-2 # for Al stand plate
     #weight_threshold = 1e-3 # for Al stand plate
 
     #weight_threshold = 1e-6 # for rock
-    weight_threshold = 1e-3 # for zeolite
+    #weight_threshold = 1e-3 # for zeolite
 
     print '--> weight_threshold:  %.2e' % weight_threshold 
 
@@ -51,19 +51,38 @@ def main(root_file_names):
         n_entries = tree.Draw('fTotalEnergy', 'fTotalEnergy>0', 'goff')
         n_counts += n_entries
 
+        # skip files with 0 events:
+        if n_entries < 0: 
+            print '\t 0 entries'
+            continue
+
         # get some info from the first tree entry
         tree.GetEntry(0)
 
+        if tree.eventHeader.GetIsHeartbeatEvent():
+            if n_entries <=2:
+                print '\t %i entries with heartbeats' % n_entries
+                continue
+
+            else:
+                tree.GetEntry(1)
+
+
         mc_run = tree.fMCRun
         n_events = mc_run.GetNEvents()
+
+        used_IS = mc_run.GetUseImportanceSampling()
 
         eventSteps = tree.eventSteps
         n_steps = eventSteps.GetNSteps()
 
         # assume all tracks have the same weight
-        weight = eventSteps.GetStep(n_steps-1).GetTrackWeight()
+        weight = 1.0
+        if used_IS:
+            weight = eventSteps.GetStep(n_steps-1).GetTrackWeight()
 
-        if weight > weight_threshold:
+        #if weight > weight_threshold:
+        if weight < weight_threshold:
             files_to_delete.append(root_file_name)
             n_counts_to_delete += n_entries
 
@@ -85,9 +104,10 @@ def main(root_file_names):
         
         print '\t %s' % os.path.basename(file_name)
 
-    print '--> %.1e of %.1e counts are above threshold' % (
+    print '--> %.1e of %.1e counts are above threshold (%.2e would remain)' % (
         n_counts_to_delete,
         n_counts, 
+        n_counts - n_counts_to_delete
     )
 
     print '--> this is %.2f' % (100.0*n_counts_to_delete/n_counts) + '% of the total'
@@ -100,14 +120,21 @@ def main(root_file_names):
         print '--> NOT moving files'
         return
 
-    print '--> moving files to $MAGERESULTS/problemFiles/'
+    #print '--> moving files to $MAGERESULTS/problemFiles/'
+    cmd = 'mkdir bad_IS'
+    output = commands.getstatusoutput(cmd)
+    #print output
 
+    print '--> moving %i files...' % n_files_to_delete
     for file_name in files_to_delete:
 
-        cmd = 'mv %s $MAGERESULTS/problemFiles/' % file_name 
+        #cmd = 'mv %s $MAGERESULTS/problemFiles/' % file_name 
+        cmd = 'mv %s bad_IS/' % file_name 
         #print cmd
         output = commands.getstatusoutput(cmd)
         #print output
+
+    print '\t done'
 
 
 
