@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
 """
-Check spectra produced with different importance-sampling settings to be sure
-they are similar.
+Compare MC spectra produced with different dead layers.
 
-27 Sept 2012 A. Schubert
+27 Oct 2012 A. Schubert
 """
 
 import os
