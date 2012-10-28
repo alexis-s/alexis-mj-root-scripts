@@ -9,6 +9,7 @@ Compare MC spectra produced with different dead layers.
 import os
 import sys
 import math
+import glob
 
 from ROOT import gROOT
 from ROOT import TCanvas
@@ -18,36 +19,49 @@ from ROOT import TH1D
 from ROOT import TLegend
 
 
-def get_hist_from_file(
-    root_file_name,
+def get_hist_from_files(
+    directory,
 ):
 
-    name = os.path.basename(root_file_name)
+    root_file_names = glob.glob('%s/*.root' % directory)
+    root_file_names.sort()
+    
+    # make a basename from the filenames
+    name = os.path.commonprefix(root_file_names)
+    name = os.path.basename(name)
     name = os.path.splitext(name)[0]
 
     gROOT.cd() # deal with TH1D/TFile/python scope issues!!
-
 
     hist = TH1D('%s' % name, '', 3000, 0, 3000)
     hist.Sumw2()
     hist.SetLineWidth(2)
 
-    root_file = TFile(root_file_name)
-    tree = root_file.Get('fTree')
+    for root_file_name in root_file_names:
 
-    hist.GetDirectory().cd()
-    n_entries = tree.Draw(
-        'fTotalEnergy*1e3 >> %s' % hist.GetName(), 
-        'fTotalEnergy>0', 
-        'goff'
+        root_file = TFile(root_file_name)
+        tree = root_file.Get('fTree')
+
+        hist.GetDirectory().cd()
+        n_entries = tree.Draw(
+            'fTotalEnergy*1e3 >> +%s' % hist.GetName(), 
+            'fTotalEnergy>0', 
+            'goff'
+        )
+
+        tree.GetEntry(0)
+        a_max = tree.fMCRun.GetAmax()
+
+    peak_energy = 2614.5
+    if a_max == 214:
+        #peak_energy = 1764.49
+        peak_energy = 609.320
+
+    peak_counts = hist.GetBinContent(
+        hist.FindBin(peak_energy)
     )
 
-    #print '----> done making hist: %s | %i entries' % (
-    #    hist.GetName(),
-    #    n_entries,
-    #)
 
-    peak_counts = hist.GetBinContent(hist.FindBin(2614.5))
     roi_counts = hist.Integral(
         hist.FindBin(2039),
         hist.FindBin(2041)-1,
@@ -59,8 +73,9 @@ def get_hist_from_file(
         1.0/roi_counts
     )
 
-    print '%s | peak: %i +/- %.1f | roi: %i +/- %.1f | ratio: (%.1f +/- %.1f) x 10^-3' % (
+    print '%s | %.1f-keV peak: %i +/- %.1f | roi: %i +/- %.1f | ratio: (%.2f +/- %.2f) x 10^-3' % (
         name,
+        peak_energy,
         peak_counts,
         math.sqrt(peak_counts),
         roi_counts,
@@ -69,7 +84,7 @@ def get_hist_from_file(
         ratio_err*1e3,
     )
 
-    hist.Rebin(20)
+    hist.Rebin(5)
     hist.SetXTitle('Energy [keV]')
     hist.SetYTitle('Counts / %.1f keV' % hist.GetBinWidth(1))
     hist.GetYaxis().SetTitleOffset(1.2)
@@ -77,16 +92,16 @@ def get_hist_from_file(
     return hist
 
 
-def main(root_file_names):
+def main(directories):
   
     hists = []
 
-    for root_file_name in root_file_names:
+    for directory in directories:
         
         #basename = os.path.basename(root_file_name)
         #print '--> processing %s' % basename
 
-        hist = get_hist_from_file(root_file_name)
+        hist = get_hist_from_files(directory)
         hists.append(hist)
 
         # end loop over hists
@@ -94,15 +109,17 @@ def main(root_file_names):
 
     canvas = TCanvas('canvas', '')
     canvas.SetLogy(1)
+    legend = TLegend(0.1, 0.9, 0.9, 0.99)
 
     hist_zero = hists[0]
-    #hist_zero.SetMinimum(0)
     hist_zero.Draw('hist')
     for i_hist in range(len(hists)):
         hist = hists[i_hist]
         hist.SetLineColor(i_hist+1)
         hist.Draw('hist same')
+        legend.AddEntry(hist, hist.GetName(), 'l')
 
+    legend.Draw()
     hist_zero.SetMinimum(5e2)
     canvas.Update()
     canvas.Print('mageSpectra.pdf')
@@ -120,9 +137,8 @@ def main(root_file_names):
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
-        print 'arguments: [MaGe/GAT ROOT output]'
+        print 'arguments: [directories of MaGe/GAT ROOT output]'
         sys.exit()
 
     main(sys.argv[1:])
-
 
