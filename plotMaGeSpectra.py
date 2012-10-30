@@ -22,17 +22,15 @@ from ROOT import TLegend
 def get_hist_from_files(
     directory,
 ):
-
+    """
+    Return a histogram energy spectrum constructed from root files in directory.
+    """
     root_file_names = glob.glob('%s/*.root' % directory)
     root_file_names.sort()
-    
-    # make a basename from the filenames
-    name = os.path.commonprefix(root_file_names)
-    name = os.path.basename(name)
-    name = os.path.splitext(name)[0]
 
     gROOT.cd() # deal with TH1D/TFile/python scope issues!!
 
+    name = directory.split('/')[0]
     hist = TH1D('%s' % name, '', 3000, 0, 3000)
     hist.Sumw2()
     hist.SetLineWidth(2)
@@ -110,9 +108,11 @@ def main(directories):
     canvas = TCanvas('canvas', '')
     canvas.SetLogy(1)
     legend = TLegend(0.1, 0.9, 0.9, 0.99)
+    legend.SetNColumns(2)
 
     hist_zero = hists[0]
     hist_zero.Draw('hist')
+    max = hist_zero.GetMaximum()
     for i_hist in range(len(hists)):
         hist = hists[i_hist]
         hist.SetLineColor(i_hist+1)
@@ -120,7 +120,7 @@ def main(directories):
         legend.AddEntry(hist, hist.GetName(), 'l')
 
     legend.Draw()
-    hist_zero.SetMinimum(5e2)
+    hist_zero.SetMinimum(max/1e4)
     canvas.Update()
     canvas.Print('mageSpectra.pdf')
     raw_input('--> enter to continue')
